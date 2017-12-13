@@ -1,18 +1,18 @@
-# Image-Detection
+# Tumor Cell Segmentation 
 
-## Step 1: 判断是否 tumor
+## Step 1: check the cell whether is tumor cell
 
-原始图像为 2048 x 2048 的 tiff 格式大图，其中 tumor 图像附带 svg 格式的区域标注。
+Original picture is 2048 x 2048 tiff style, and tumor pictures have regional annotations with SVG format.
 
 ### 1. Image Preprocess
 
-* 将大图分成若干 299 x 299 的小图，进行标注，然后对 tumor 图像做增强。
-* 图像裁剪：将原图扩展成 2219 x 2219 (2048 + 299 - 128 = 2219)，然后用 299 x 299的窗口依次裁剪，步长为 128，裁剪得到 17 x 17 = 289 张小图。
-* 图像标注：将 svg 格式的标注转换成 2219 x 2219 的图像(canvas)，判断裁剪出的小图中心 (128 x 128) 是否有像素落在 tumor 区域内，若有则标为1，否则为0。
-* 图像增强：对 tumor 图像，进行 4 次 rotate 操作，得到 4 个图像；对 4 个图像再做 left-to-right-flip 操作，得到 4 个图像；对以上 8 个图像做 perturb 操作，再得到 8 个图像。同时，裁剪图像的时候做 jitter 操作，增加随机性。
-* perturb 操作：利用 tensorflow 的 image 库调整图像的brightness、saturation、hue 和 contrast 参数，其中max_delta分别为 64/255、0.25、0.04 和 0.75。
-* jitter 操作：对图像裁剪的起点坐标增加一个 0～8 的随机 offset。
-* 用pip安装multiprocess库有助于提高服务器上的运行效率！！！
+* Divide the big picture into a small picture (299 x 299), label them, then do data argument.
+* Image cropping: expand the original picture to 2219 x 2219 (2048 + 299 - 128 = 2219),then use 299 x 299 size`s window to crop, step is 128, finally we have 17 x 17 = 289  small size pictures.
+* Image label：expand svg style picture to  2219 x 2219 (canvas), check whether has tumor in the small picture after cropping (128 x 128), if yes, labels 1,  otherwise labels 0.
+* Image argument：for each tumor image, we have 4 rotate operation and get 4 pictures; for those 4 pictures, let`s do left-to-right-flip operation and get other 4 pictures; for those 8 pictures to do argument again. At the same time, we do jitter operation in order to enhance randomness.
+* Perturb operation: used tensorflow`s image library to control brightness、saturation、hue and contrast, max_delta are 64/255、0.25、0.04 and 0.75.
+* Jitter operation: for the origin point of cropping, we add 0~8 offset randomly.
+* Used pip to set multiprocess in order to improve efficiency.
 * Source Code:
 
     ```shell
@@ -22,24 +22,24 @@
 
 ### 2. Inception v3
 
-* 采用 Inception v3 模型进行训练，输入为 1 中得到的 patch 打包成的 TFRecord 文件，输出为每张 patch 是 tumor 的概率。
-* 打包：将所有的 patch 分成两个文件夹：0 和 1，其中 0 为 normal，1 为 tumor。0 和 1 放在 images 目录下。在 images 的同级目录下写入一个`labels.txt`，每行写入 0 和 1，分别代表 images 目录下的两个分类。然后统计 patch 个数，分出 1/10 给 validation，修改`process_medical.sh`脚本中的validation数值。完成后编译：
+* Used Inception v3 to train, input is the patch which are in TFRecord file，output is the probability of tumor.
+* All patch will be in two files: 0 and 1, 0 is normal, 1 is tumor. 0 and 1 are in images file. In images, we write in `labels.txt`. Every line is 0 or 1, means two class in the images file. Then, count the number of patch, 1/10 in validation，change the value of validation in `process_medical.sh`. Compile：
 
     ```shell
     cd /path/to/models/inception
     bazel build //inception:process_medical
     ```
-    编译完成后运行:
+    run:
     ```shell
     bazel-bin/inception/process_medical /path/to/input/images
     ```
-* 训练：打包完成后进行训练。其中 batch size = 32 * GPU number，learning rate = 0.05，learning rate decay factor = 0.5。编译：
+* Train: batch size = 32 * GPU number, learning rate = 0.05, learning rate decay factor = 0.5. Compile：
 
     ```shell
     cd /path/to/models/inception
     bazel build //inception:medical_train_with_eval
     ```
-    编译完成后运行：
+    run:
 
     ```shell
     bazel-bin/inception/medical_train_with_eval \
@@ -52,15 +52,15 @@
     --learning_rate_decay_factor=0.5 \
     --log_file=.txt
     ```
-    注意事项：训练结束后，`train_dir` 目录下的文件必须备份到 `pretrained_model_checkpoint_path` 目录下，并修改 checkpoint 文件，使得所有 ckpt 指向 `pretrained_model_checkpoint_path` 目录。
-    运行日志保存在`log_file`下，包含 ACC、loss等信息。
-* 评估：对模型进行评估。编译：
+    Attention: After train, all the files in `train_dir` need to be copied to `pretrained_model_checkpoint_path`, and change checkpoint file, make all the ckpt point to `pretrained_model_checkpoint_path` .
+    Log is in`log_file`, including information of ACC or loss.
+* Evaluation. Compile：
 
     ```shell
     cd /path/to/models/inception
     bazel build //inception:medical_eval
     ```
-    编译完成后运行：
+    run:
 
     ```shell
     bazel-bin/inception/medical_eval \
@@ -71,16 +71,16 @@
     --subset=validation \
     --eval_file=.txt
     ```
-    注意事项：运行日志保存在`eval_file`下，包含 ACC、loss等信息。
-* 预测：类似评估的操作。将一张大图裁剪成小图后，打包成 TFRecord 输入评估程序，输出每张 patch 是否 tumor 的概率，根据置信度确定是否tumor。
+    Attention: Log is in`log_file`, including information of ACC or loss.
+* Prediction:Crop a big picture into small picture, write in the TFRecord file, output the possibility of each pictures whether is has tumor or not.
 
 
-## Step 2: 计算 tumor 区域占比
+## Step 2: Calculate the proportion of tumor regions
 
 ### 1. FCN
 
-* 利用 FCN 生成每个小图的 heatmap，计算小图中的 tumor 区域面积。
-* 训练：输入为 patch 和对应的 annotation，其中 annotation 为 step 1 中对 canvas 的裁剪。FCN 为基于 VGG Net 改造的全卷积网络。把最后几层全连接层替换成 1 x 1 卷积层，再利用 倒数第三和第四层的 pooling 进行上采样操作，得到 patch 原图大小的输出。其中 learning rate = 0.0001，batch size = 32。运行：
+* Using FCN create each small pictures` heatmap, calculate the proportion of tumor regions in the small picture.
+* Train: inpout is patch and it`s annotation, annotation is the cropping of step 1. FCN is based on VGG Net. Change last fully connection networks to 1 x 1 convolution network, then use the last 3 and 4 pooling layer to upsample, output the same size`s picture of patch. Learning rate = 0.0001, batch size = 32. Run：
 
     ```shell
     python FCN.py \
@@ -90,7 +90,7 @@
     --data_dir=/path/to/data/ \
     --mode=train
     ```
-* 评估：输入为 patch 和对应的 annotation，输出为预测的 annotation。统计预测的 tumor 区域 S1 与实际的 tumor 区域 S 的交集，和交集与 S1 和 S 的并集的比值。运行：
+* Evaluation: input is patch and it`s annotation, output is expectant annotation. Calculate the proportion of expectant regions and compare the real regions and calculate the accuracy. Run：
 
     ```shell
     python FCN.py \
